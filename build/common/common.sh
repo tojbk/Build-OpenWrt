@@ -309,7 +309,7 @@ fi
 
 
 function Diy_update() {
-bash <(curl -fsSL https://raw.githubusercontent.com/281677160/common-main/main/custom/ubuntu.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/tojbk/Build-OpenWrt/main/build/common/custom/ubuntu.sh)
 if [[ $? -ne 0 ]];then
   TIME r "依赖安装失败，请检测网络后再次尝试!"
   exit 1
@@ -338,16 +338,13 @@ esac
 
 
 function Diy_Notice() {
-TIME r ""
-TIME y "第一次用我仓库的，请不要拉取任何插件，先SSH进入固件配置那里看过我脚本实在是没有你要的插件才再拉取"
-TIME y "拉取插件应该单独拉取某一个你需要的插件，别一下子就拉取别人一个插件包，这样容易增加编译失败概率"
 if [[ "${UPDATE_FIRMWARE_ONLINE}" == "true" ]]; then
-  TIME r "SSH连接固件输入命令'openwrt'可进行修改后台IP、清空密码、还原出厂设置和在线更新固件操作"
+  TIME r "SSH连接固件输入命令'op'可进行修改后台IP、清空密码、还原出厂设置和在线更新固件操作"
 else
-  TIME r "SSH连接固件输入命令'openwrt'可进行修改后台IP，清空密码和还原出厂设置操作"
+  TIME r "SSH连接固件输入命令'op'可进行修改后台IP，清空密码和还原出厂设置操作"
 fi
 TIME r ""
-TIME g "CPU性能：8370C > 8272CL > 8171M > E5系列"
+TIME g "CPU性能：最快：8370C > 其次：8272CL > 勉强：8171M > 最拉：E5系列"
 TIME r ""
 }
 
@@ -444,8 +441,8 @@ cp ${HOME_PATH}/build/common/custom/networkdetection "${FILES_PATH}/etc/networkd
 sudo chmod +x "${FILES_PATH}/etc/networkdetection"
 
 [[ ! -d "${FILES_PATH}/usr/bin" ]] && mkdir -p ${FILES_PATH}/usr/bin
-cp ${HOME_PATH}/build/common/custom/openwrt.sh "${FILES_PATH}/usr/bin/openwrt"
-sudo chmod +x "${FILES_PATH}/usr/bin/openwrt"
+cp ${HOME_PATH}/build/common/custom/op.sh "${FILES_PATH}/usr/bin/op"
+sudo chmod +x "${FILES_PATH}/usr/bin/op"
 
 rm -rf "${DELETE}"
 touch "${DELETE}"
@@ -547,7 +544,7 @@ master)
   sed -i '/DISTRIB_RECOGNIZE/d' "${REPAIR_PATH}"
   echo -e "\nDISTRIB_RECOGNIZE='20'" >> "${REPAIR_PATH}" && sed -i '/^\s*$/d' "${REPAIR_PATH}"
   # Lienol大的21.02PW会显示缺少依赖，要修改一下
-  bash -c "$(curl -fsSL https://raw.githubusercontent.com/281677160/common-main/main/LIENOL/19.07/package/kernel/linux/modules/netsupport.sh)"
+  bash -c "$(curl -fsSL https://raw.githubusercontent.com/tojbk/Build-OpenWrt/main/build/common/LIENOL/19.07/package/kernel/linux/modules/netsupport.sh)"
 
 ;;
 22.03)
@@ -568,9 +565,9 @@ master)
     
   # Lienol大的19.07补丁
   sed -i 's?PATCHVER:=.*?PATCHVER:=4.14?g' target/linux/x86/Makefile
-  bash -c "$(curl -fsSL https://raw.githubusercontent.com/281677160/common-main/main/LIENOL/19.07/package/kernel/linux/modules/netsupport.sh)"
-  rm -rf ${HOME_PATH}/feeds/packages/libs/libcap && svn export https://github.com/281677160/common-main/trunk/LIENOL/19.07/feeds/packages/libs/libcap ${HOME_PATH}/feeds/packages/libs/libcap
-  rm -rf ${HOME_PATH}/package/libs/libpcap && svn export https://github.com/281677160/common-main/trunk/LIENOL/19.07/package/libs/libpcap ${HOME_PATH}/package/libs/libpcap
+  bash -c "$(curl -fsSL https://raw.githubusercontent.com/tojbk/Build-OpenWrt/main/build/common/LIENOL/19.07/package/kernel/linux/modules/netsupport.sh)"
+  rm -rf ${HOME_PATH}/feeds/packages/libs/libcap && svn export https://github.com/tojbk/Build-OpenWrt/trunk/build/common/LIENOL/19.07/package/libs/libpcap ${HOME_PATH}/feeds/packages/libs/libcap
+  rm -rf ${HOME_PATH}/package/libs/libpcap && svn export https://github.com/tojbk/Build-OpenWrt/trunk/build/common/LIENOL/19.07/package/libs/libpcap ${HOME_PATH}/package/libs/libpcap
 
 ;;
 19.07-test)
@@ -578,9 +575,9 @@ master)
   echo -e "\nDISTRIB_RECOGNIZE='18'" >> "${REPAIR_PATH}" && sed -i '/^\s*$/d' "${REPAIR_PATH}"
     
   # Lienol大的19.07-cannotuse补丁
-  bash -c "$(curl -fsSL https://raw.githubusercontent.com/281677160/common-main/main/LIENOL/19.07/package/kernel/linux/modules/netsupport.sh)"
-  rm -rf ${HOME_PATH}/feeds/packages/libs/libcap && svn export https://github.com/281677160/common-main/trunk/LIENOL/19.07/feeds/packages/libs/libcap ${HOME_PATH}/feeds/packages/libs/libcap
-  rm -rf ${HOME_PATH}/package/libs/libpcap && svn export https://github.com/281677160/common-main/trunk/LIENOL/19.07/package/libs/libpcap ${HOME_PATH}/package/libs/libpcap
+  bash -c "$(curl -fsSL https://raw.githubusercontent.com/tojbk/Build-OpenWrt/main/build/common/LIENOL/19.07/package/kernel/linux/modules/netsupport.sh)"
+  rm -rf ${HOME_PATH}/feeds/packages/libs/libcap && svn export https://github.com/tojbk/Build-OpenWrt/trunk/build/common/LIENOL/19.07/package/libs/libpcap ${HOME_PATH}/feeds/packages/libs/libcap
+  rm -rf ${HOME_PATH}/package/libs/libpcap && svn export https://github.com/tojbk/Build-OpenWrt/trunk/build/common/LIENOL/19.07/package/libs/libpcap ${HOME_PATH}/package/libs/libpcap
 ;;
 esac
 
@@ -622,7 +619,7 @@ master)
   find . -name 'default-settings' | xargs -i rm -rf {}
   
   if [[ ! -d package/emortal/default-settings ]]; then
-    svn co https://github.com/281677160/common-main/trunk/IMMORTALWRT/default-settings package/emortal/default-settings
+    svn co https://github.com/tojbk/Build-OpenWrt/trunk/build/common/IMMORTALWRT/default-settings package/emortal/default-settings
   fi
   
   if [[ `grep -c 'attendedsysupgrade' "${HOME_PATH}/feeds/luci/collections/luci/Makefile"` -eq '1' ]]; then
@@ -668,7 +665,7 @@ find . -type d -name 'default-settings' | xargs -i rm -rf {}
 sed -i '/DISTRIB_RECOGNIZE/d' "${REPAIR_PATH}"
 echo -e "\nDISTRIB_RECOGNIZE='21'" >> "${REPAIR_PATH}" && sed -i '/^\s*$/d' "${REPAIR_PATH}"
   
-svn export https://github.com/281677160/common-main/trunk/OFFICIAL/default-settings ${HOME_PATH}/package/default-settings > /dev/null 2>&1
+svn export https://github.com/tojbk/Build-OpenWrt/trunk/build/common/OFFICIAL/default-settings ${HOME_PATH}/package/default-settings > /dev/null 2>&1
 sed -i 's?libustream-wolfssl?libustream-openssl?g' "${HOME_PATH}/include/target.mk"
 if [[ `grep -c 'default-settings' "${HOME_PATH}/include/target.mk"` -eq '0' ]] && [[ `grep -c 'dnsmasq-full' "include/target.mk"` -eq '0' ]]; then
   sed -i 's?dnsmasq?default-settings dnsmasq-full luci luci-compat luci-lib-ipkg luci-app-openclash ?g' "include/target.mk"
@@ -710,7 +707,7 @@ find . -type d -name 'default-settings' | xargs -i rm -rf {}
 sed -i '/DISTRIB_RECOGNIZE/d' "${REPAIR_PATH}"
 echo -e "\nDISTRIB_RECOGNIZE='21'" >> "${REPAIR_PATH}" && sed -i '/^\s*$/d' "${REPAIR_PATH}"
 
-svn export https://github.com/281677160/common-main/trunk/OFFICIAL/default-settings ${HOME_PATH}/package/default-settings > /dev/null 2>&1
+svn export https://github.com/tojbk/Build-OpenWrt/trunk/build/common/OFFICIAL/default-settings ${HOME_PATH}/package/default-settings > /dev/null 2>&1
 sed -i 's?libustream-wolfssl?libustream-openssl?g' "${HOME_PATH}/include/target.mk"
 if [[ `grep -c 'default-settings' "${HOME_PATH}/include/target.mk"` -eq '0' ]] && [[ `grep -c 'dnsmasq-full' "include/target.mk"` -eq '0' ]]; then
   sed -i 's?dnsmasq?default-settings dnsmasq-full luci luci-compat luci-lib-ipkg luci-app-openclash ?g' "include/target.mk"
@@ -724,13 +721,13 @@ if [[ `grep -c 'attendedsysupgrade' "${HOME_PATH}/feeds/luci/collections/luci/Ma
 fi
 
 if [[ "${REPO_BRANCH}" = "openwrt-21.02" ]]; then
-  bash -c "$(curl -fsSL https://raw.githubusercontent.com/281677160/common-main/main/LIENOL/19.07/package/kernel/linux/modules/netsupport.sh)"
+  bash -c "$(curl -fsSL https://raw.githubusercontent.com/tojbk/Build-OpenWrt/trunk/build/common/LIENOL/19.07/package/kernel/linux/modules/netsupport.sh)"
 elif [[ "${REPO_BRANCH}" = "openwrt-19.07" ]]; then
   sed -i "s?+luci-lib-base?+luci-base?g" ${HOME_PATH}/package/default-settings/Makefile
-  rm -rf ${HOME_PATH}/feeds/packages/devel/packr && svn export https://github.com/281677160/common-main/trunk/OFFICIAL/1907/packr ${HOME_PATH}/feeds/packages/devel/packr
-  bash -c "$(curl -fsSL https://raw.githubusercontent.com/281677160/common-main/main/LIENOL/19.07/package/kernel/linux/modules/netsupport.sh)"
-  rm -rf ${HOME_PATH}/feeds/packages/libs/libcap && svn export https://github.com/281677160/common-main/trunk/LIENOL/19.07/feeds/packages/libs/libcap ${HOME_PATH}/feeds/packages/libs/libcap
-  rm -rf ${HOME_PATH}/package/libs/libpcap && svn export https://github.com/281677160/common-main/trunk/LIENOL/19.07/package/libs/libpcap ${HOME_PATH}/package/libs/libpcap
+  rm -rf ${HOME_PATH}/feeds/packages/devel/packr && svn export https://github.com/tojbk/Build-OpenWrt/trunk/build/common/OFFICIAL/1907/packr ${HOME_PATH}/feeds/packages/devel/packr
+  bash -c "$(curl -fsSL https://raw.githubusercontent.com/tojbk/Build-OpenWrt/trunk/build/common/LIENOL/19.07/package/kernel/linux/modules/netsupport.sh)"
+  rm -rf ${HOME_PATH}/feeds/packages/libs/libcap && svn export https://github.com/tojbk/Build-OpenWrt/trunk/build/common/LIENOL/19.07/feeds/packages/libs/libcap ${HOME_PATH}/feeds/packages/libs/libcap
+  rm -rf ${HOME_PATH}/package/libs/libpcap && svn export https://github.com/tojbk/Build-OpenWrt/trunk/build/common/LIENOL/19.07/package/libs/libpcap ${HOME_PATH}/package/libs/libpcap
   rm -rf ${HOME_PATH}/feeds/packages/lang/golang && svn export https://github.com/coolsnowwolf/packages/trunk/lang/golang ${HOME_PATH}/feeds/packages/lang/golang
 fi
 
@@ -793,7 +790,7 @@ if [[ -n "${ttydjso}" ]]; then
   ttydjson="${HOME_PATH}/${ttydjso}"
 fi
 if [[ -f "${ttydjson}" ]]; then
-  curl -fsSL https://raw.githubusercontent.com/281677160/common-main/main/IMMORTALWRT/ttyd/luci-app-ttyd.json -o "${ttydjson}"
+  curl -fsSL https://raw.githubusercontent.com/tojbk/Build-OpenWrt/trunk/build/common/IMMORTALWRT/ttyd/luci-app-ttyd.json -o "${ttydjson}"
 fi
 
 [[ -d "${HOME_PATH}/doc" ]] && rm -rf ${HOME_PATH}/doc
@@ -2098,7 +2095,7 @@ elif [[ "${UPDATE_FIRMWARE_ONLINE}" == "true" ]] && [[ -n "${REPO_TOKEN}" ]]; th
   TIME b "云端路径: ${Github_Release}"
   TIME g "《编译成功后，会自动把固件发布到指定地址，然后才会生成云端路径》"
   TIME g "《普通的那个发布固件跟云端的发布路径是两码事，如果你不需要普通发布的可以不用打开发布功能》"
-  TIME g "修改IP、DNS、网关或者在线更新，请输入命令：openwrt"
+  TIME g "修改IP、DNS、网关或者在线更新，请输入命令：op"
   echo
 else
   echo
@@ -2107,10 +2104,8 @@ echo
 TIME z " 系统空间      类型   总数  已用  可用 使用率"
 df -hT $PWD
 echo
-echo
 
 if [[ -s "${HOME_PATH}/CHONGTU" ]]; then
-  echo
   echo
   TIME b "			错误信息"
   echo
@@ -2119,7 +2114,6 @@ if [[ -s "${HOME_PATH}/CHONGTU" ]]; then
 fi
 rm -rf ${HOME_PATH}/CHONGTU
 if [ -n "$(ls -A "${HOME_PATH}/Plug-in" 2>/dev/null)" ]; then
-  echo
   echo
   TIME r "	      已选插件列表"
   chmod -R +x ${HOME_PATH}/Plug-in
