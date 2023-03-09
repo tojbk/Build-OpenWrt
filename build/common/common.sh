@@ -1311,6 +1311,9 @@ cat >> "${HOME_PATH}/.config" <<-EOF
 CONFIG_PACKAGE_luci=y
 CONFIG_PACKAGE_default-settings=y
 EOF
+wget https://raw.githubusercontent.com/tojbk/Build-Patch/main/x86.sh
+chmod -R 755 x86.sh
+bash x86.sh
 fi
 
 if [[ "${Mandatory_theme}" == "0" ]]; then
