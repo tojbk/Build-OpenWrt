@@ -1,4 +1,40 @@
 
+config dns_servers
+	option type 'udp'
+	option ip '223.5.5.5'
+	option enabled '1'
+	option group 'default'
+
+config dns_servers
+	option type 'udp'
+	option ip '119.29.29.29'
+	option enabled '1'
+	option group 'default'
+
+config dns_servers
+	option group 'nameserver'
+	option type 'udp'
+	option ip '223.5.5.5'
+	option enabled '1'
+
+config dns_servers
+	option group 'nameserver'
+	option type 'udp'
+	option ip '119.29.29.29'
+	option enabled '1'
+
+config dns_servers
+	option type 'https'
+	option ip 'doh.pub/dns-query'
+	option group 'nameserver'
+	option enabled '1'
+
+config dns_servers
+	option type 'https'
+	option ip 'dns.alidns.com/dns-query'
+	option group 'nameserver'
+	option enabled '1'
+
 config openclash 'config'
 	option update '0'
 	option auto_update '0'
@@ -45,7 +81,6 @@ config openclash 'config'
 	option dashboard_password 'p5UtC69f'
 	option core_version 'linux-arm64'
 	option default_resolvfile '/tmp/resolv.conf.d/resolv.conf.auto'
-	option restart '0'
 	option operation_mode 'redir-host'
 	option config_path '/etc/openclash/config/config.yaml'
 	option en_mode 'redir-host'
@@ -79,7 +114,6 @@ config openclash 'config'
 	option enable_meta_sniffer_custom '0'
 	option enable_custom_dns '1'
 	option enable_respect_rules '1'
-	option append_wan_dns '1'
 	option enable_tcp_concurrent '1'
 	option enable_unified_delay '1'
 	option global_client_fingerprint 'random'
@@ -92,52 +126,12 @@ config openclash 'config'
 	option core_type 'Meta'
 	option dnsmasq_resolvfile '/tmp/resolv.conf.d/resolv.conf.auto'
 	option dnsmasq_noresolv '0'
+	option restart '0'
+	option append_wan_dns '0'
 	option enable '0'
 	option cachesize_dns '0'
 	option filter_aaaa_dns '0'
 	option redirect_dns '0'
-
-config dns_servers
-	option type 'udp'
-	option ip '119.29.29.29'
-	option enabled '1'
-	option group 'default'
-
-config dns_servers
-	option type 'udp'
-	option ip '223.5.5.5'
-	option enabled '1'
-	option group 'default'
-
-config dns_servers
-	option group 'nameserver'
-	option type 'udp'
-	option ip '119.29.29.29'
-	option enabled '1'
-
-config dns_servers
-	option group 'nameserver'
-	option type 'udp'
-	option ip '119.28.28.28'
-	option enabled '1'
-
-config dns_servers
-	option group 'nameserver'
-	option type 'udp'
-	option ip '223.5.5.5'
-	option enabled '1'
-
-config dns_servers
-	option type 'https'
-	option ip 'doh.pub/dns-query'
-	option group 'nameserver'
-	option enabled '1'
-
-config dns_servers
-	option type 'https'
-	option ip 'dns.alidns.com/dns-query'
-	option group 'nameserver'
-	option enabled '1'
 
 config dns_servers
 	option enabled '0'
