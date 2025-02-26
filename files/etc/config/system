@@ -1,0 +1,35 @@
+
+config system
+	option ttylogin '0'
+	option log_size '512'
+	option urandom_seed '0'
+	option timezone 'CST-8'
+	option zonename 'Asia/Shanghai'
+	option log_proto 'udp'
+	option conloglevel '8'
+	option cronloglevel '5'
+	option zram_comp_algo 'lzo'
+	option hostname 'iPhone'
+
+config timeserver 'ntp'
+	list server 'ntp.tencent.com'
+	list server 'ntp1.aliyun.com'
+	list server 'ntp.ntsc.ac.cn'
+	list server 'cn.ntp.org.cn'
+	option enable_server '1'
+
+config led 'led_green'
+	option name 'GREEN'
+	option sysfs 'nx30pro:green'
+	option default '1'
+
+config led 'led_red'
+	option name 'RED'
+	option sysfs 'nx30pro:red'
+	option default '0'
+
+config imm_init
+	option ipv6 '1'
+	option lang '1'
+	option system_chn '1'
+
