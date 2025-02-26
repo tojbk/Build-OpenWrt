@@ -76,16 +76,6 @@ jobs:
         git clone $REPO_URL -b $REPO_BRANCH openwrt
         ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
 
-    - name: 加载缓存
-      uses: actions/cache@v4
-      with:
-        path: |
-          /workdir/openwrt
-          /workdir/.openwrt_cache
-        key: ${{ runner.os }}-openwrt-${{ hashFiles('**/openwrt/Makefile') }}
-        restore-keys: |
-          ${{ runner.os }}-openwrt-
-
     - name: 加载设置
       run: |
         [ -e $FEEDS_CONF ] && mv $FEEDS_CONF openwrt/feeds.conf.default
@@ -106,6 +96,16 @@ jobs:
         chmod +x $DIY_P2_SH
         cd openwrt
         $GITHUB_WORKSPACE/$DIY_P2_SH
+
+    - name: 加载缓存
+      uses: actions/cache@v4
+      with:
+        path: |
+          /workdir/openwrt
+          /workdir/.openwrt_cache
+        key: ${{ runner.os }}-openwrt-${{ hashFiles('**/openwrt/Makefile') }}
+        restore-keys: |
+          ${{ runner.os }}-openwrt-
 
     - name: 下载dl包
       id: package
