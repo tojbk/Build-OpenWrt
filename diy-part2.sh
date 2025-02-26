@@ -18,3 +18,6 @@
 
 # Modify hostname
 #sed -i 's/OpenWrt/P3TERX-Router/g' package/base-files/files/bin/config_generate
+
+rm -rf feeds/luci/applications/luci-app-openclash
+git clone https://github.com/tojbk/luci-app-openclash feeds/luci/applications/luci-app-openclash
