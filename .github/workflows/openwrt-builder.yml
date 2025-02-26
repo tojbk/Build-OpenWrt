@@ -76,6 +76,16 @@ jobs:
         git clone $REPO_URL -b $REPO_BRANCH openwrt
         ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
 
+    - name: 加载缓存
+      uses: actions/cache@v2
+      with:
+        path: |
+          /workdir/openwrt
+          /workdir/.openwrt_cache
+        key: ${{ runner.os }}-openwrt-${{ hashFiles('**/openwrt/Makefile') }}
+        restore-keys: |
+          ${{ runner.os }}-openwrt-
+
     - name: 加载设置
       run: |
         [ -e $FEEDS_CONF ] && mv $FEEDS_CONF openwrt/feeds.conf.default
@@ -129,6 +139,7 @@ jobs:
       if: env.UPLOAD_FIRMWARE == 'true' && !cancelled()
       run: |
         cd openwrt/bin/targets/*/*
+        find . \( -name "*buildinfo*" -o -name "*sha256sums*" -o -name "*factory.bin*" -o -name "*manifest*" -o -name "*json*" -o -name "*kernel.bin*" \) -exec rm -rf {} +
         rm -rf packages
         echo "FIRMWARE=$PWD" >> $GITHUB_ENV
         echo "status=success" >> $GITHUB_OUTPUT
