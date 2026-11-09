@@ -82,18 +82,17 @@ jobs:
         sudo truncate -s "${mnt_size}"G /mnt/mnt.img
         sudo truncate -s "${root_size}"G /root.img
         # 绑定loop
-        sudo losetup "${LOOP1}" /mnt/mnt.img
-        sudo losetup "${LOOP2}" /root.img
+        sudo losetup /dev/loop6 /mnt/mnt.img
+        sudo losetup /dev/loop7 /root.img
         # LVM创建
-        sudo pvcreate "${LOOP1}"
-        sudo pvcreate "${LOOP2}"
-        sudo vgcreate github "${LOOP1}" "${LOOP2}"
+        sudo pvcreate /dev/loop6
+        sudo pvcreate /dev/loop7
+        sudo vgcreate github /dev/loop6 /dev/loop7
         sudo lvcreate -n runner -l 100%FREE github
         # 格式化XFS
         sudo mkfs.xfs /dev/github/runner
         # 创建工作目录并挂载（重点补上）
         sudo mkdir -p /workdir
-        sudo mount /dev/github/runner /workdir
         sudo chown "$USER:$(id -g -n "$USER")" /workdir
         df -hT
         free -h
