@@ -201,11 +201,14 @@ jobs:
         body: |
           📦 固件编译时间：${{ steps.tag.outputs.release_tag }}
           📶 设备：H3C NX30PRO (MT7981)
-          🧱 源码：immortalwrt-mt798x openwrt-21.02
+          🧱 源码：immortalwrt-mt798x（hanwckf） openwrt-21.02
+          ⚙️ 内核版本：Linux 5.4.284
           🖥️ 编译环境：Ubuntu 24.04
           🔗 默认访问地址：http://192.168.123.1
           👤 默认用户名：root
           🔑 默认密码：password
+          📝 更新说明
+          • OpenClash v0.48.002
         files: ${{ env.FIRMWARE }}/*
 
     - name: 删除旧Workflow记录
