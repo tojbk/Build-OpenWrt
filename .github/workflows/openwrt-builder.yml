@@ -15,7 +15,7 @@ env:
   UPLOAD_FIRMWARE: true
   UPLOAD_RELEASE: true
   TZ: Asia/Shanghai
-  BUILD_DIR: $HOME/build/openwrt
+  BUILD_DIR: $HOME/build
   CCACHE_DIR: $HOME/build/openwrt/ccache
   USE_CCACHE: 1
   TAG_PREFIX: "NX30PRO-"
@@ -61,17 +61,17 @@ jobs:
           cd $BUILD_DIR
           git config --global http.postBuffer 524288000
           git config --global http.timeout 300
-          git clone --depth=1 --single-branch -b $REPO_BRANCH $REPO_URL .
-          ln -sf $BUILD_DIR
+          git clone $REPO_URL openwrt
+          ln -sf $BUILD_DIR/openwrt
           echo "源码拉取完成"
 
       - name: 加载缓存
         uses: actions/cache@v5
         with:
           path: |
-            ${{ env.BUILD_DIR }}/dl
-            ${{ env.BUILD_DIR }}/build_dir
-            ${{ env.BUILD_DIR }}/staging_dir
+            ${{ env.BUILD_DIR }}/openwrt/dl
+            ${{ env.BUILD_DIR }}/openwrt/build_dir
+            ${{ env.BUILD_DIR }}/openwrt/staging_dir
             ${{ env.CCACHE_DIR }}
           key: ${{ runner.os }}-nx30pro-${{ hashFiles('**/feeds.conf.default','**/.config') }}
           restore-keys: |
@@ -80,7 +80,7 @@ jobs:
       - name: 执行 diy-part1
         run: |
           set -eo pipefail
-          cd $BUILD_DIR
+          cd $BUILD_DIR/openwrt
           [ -e $GITHUB_WORKSPACE/$FEEDS_CONF ] && cp $GITHUB_WORKSPACE/$FEEDS_CONF feeds.conf.default
           chmod +x $GITHUB_WORKSPACE/$DIY_P1_SH
           $GITHUB_WORKSPACE/$DIY_P1_SH
@@ -88,19 +88,19 @@ jobs:
       - name: 更新 feeds
         run: |
           set -eo pipefail
-          cd $BUILD_DIR
+          cd $BUILD_DIR/openwrt
           ./scripts/feeds update -a || (sleep 10 && ./scripts/feeds update -a)
 
       - name: 安装 feeds
         run: |
           set -eo pipefail
-          cd $BUILD_DIR
+          cd $BUILD_DIR/openwrt
           ./scripts/feeds install -a
 
       - name: 执行 diy-part2
         run: |
           set -eo pipefail
-          cd $BUILD_DIR
+          cd $BUILD_DIR/openwrt
           [ -d $GITHUB_WORKSPACE/files ] && cp -r $GITHUB_WORKSPACE/files ./
           [ -e $GITHUB_WORKSPACE/$CONFIG_FILE ] && cp $GITHUB_WORKSPACE/$CONFIG_FILE .config
           chmod +x $GITHUB_WORKSPACE/$DIY_P2_SH
@@ -111,7 +111,7 @@ jobs:
         id: package
         run: |
           set -eo pipefail
-          cd $BUILD_DIR
+          cd $BUILD_DIR/openwrt
           make download -j8
           find dl -size -1024c -exec rm -f {} \;
 
@@ -119,7 +119,7 @@ jobs:
         id: compile
         run: |
           set -eo pipefail
-          cd $BUILD_DIR
+          cd $BUILD_DIR/openwrt
           echo "开始编译，CPU核心：$(nproc)"
           make -j$(nproc) || make -j1 V=s
           echo "status=success" >> $GITHUB_OUTPUT
@@ -139,7 +139,7 @@ jobs:
         if: env.UPLOAD_FIRMWARE == 'true' && steps.compile.outputs.status == 'success'
         run: |
           set -eo pipefail
-          cd $BUILD_DIR/bin/targets/*/*
+          cd $BUILD_DIR/openwrt/bin/targets/*/*
           find . \( -name "*buildinfo*" -o -name "*sha256sums*" -o -name "*manifest*" -o -name "*json*" -o -name "*kernel.bin*" \) -exec rm -rf {} +
           rm -rf packages
           echo "FIRMWARE=$PWD" >> $GITHUB_ENV
