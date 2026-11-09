@@ -202,12 +202,12 @@ jobs:
           📶 设备：H3C NX30PRO (MT7981)
           🧱 源码：immortalwrt-mt798x（hanwckf） openwrt-21.02
           ⚙️ 内核版本：Linux 5.4.284
-          🖥️ 编译环境：Ubuntu 24.04
+          🖥️ 编译环境：Ubuntu 22.04
           🔗 默认访问地址：http://192.168.123.1
           👤 默认用户名：root
           🔑 默认密码：password
           📝 更新说明
-          • OpenClash v0.48.002
+           • OpenClash v0.48.002
         files: ${{ env.FIRMWARE }}/*
 
     - name: 删除旧Workflow记录
@@ -221,8 +221,8 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        # 获取所有release，按发布时间排序，跳过最新2个，其余删除
-        RELEASES=$(gh release list --limit 100 --json tagName,publishedAt --jq 'sort_by(.publishedAt) | reverse | .[2:] | .[].tagName')
+        # 获取所有release，按发布时间排序，跳过最新3个，其余删除
+        RELEASES=$(gh release list --limit 100 --json tagName,publishedAt --jq 'sort_by(.publishedAt) | reverse | .[3:] | .[].tagName')
         for tag in $RELEASES; do
           gh release delete "$tag" -y
           git push origin --delete "$tag"
