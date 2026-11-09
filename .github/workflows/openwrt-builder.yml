@@ -19,6 +19,7 @@ env:
   CCACHE_DIR: $HOME/build/openwrt/ccache
   USE_CCACHE: 1
   TAG_PREFIX: "NX30PRO-"
+  CONF_WORKSPACE: ${{ github.workspace }}
 
 jobs:
   build:
@@ -26,13 +27,12 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: 仓库配置
+      - name: 配置仓库
         uses: actions/checkout@v5
 
       - name: 系统初始化 + 释放磁盘空间
         run: |
           set -eo pipefail
-          # 禁用swap
           sudo swapoff -a
           sudo rm -f /swapfile /mnt/swapfile
           docker images -q | xargs -r docker rmi -f 2>/dev/null || true
@@ -62,51 +62,54 @@ jobs:
           git config --global http.postBuffer 524288000
           git config --global http.timeout 300
           git clone --depth=1 --single-branch -b $REPO_BRANCH $REPO_URL .
-          echo "源码拉取完成"
+          echo "✅ OpenWrt源码拉取完成，源码目录：$BUILD_DIR"
 
-      - name: 加载缓存
+      - name: 加载编译缓存
         uses: actions/cache@v5
         with:
           path: |
             ${{ env.BUILD_DIR }}/dl
-            ${{ env.BUILD_DIR }}/build_dir
-            ${{ env.BUILD_DIR }}/staging_dir
             ${{ env.CCACHE_DIR }}
-          key: ${{ runner.os }}-nx30pro-${{ hashFiles('**/feeds.conf.default','**/.config') }}
+          key: ${{ runner.os }}-nx30pro-${{ hashFiles('${{ env.CONF_WORKSPACE }}/feeds.conf.default','${{ env.CONF_WORKSPACE }}/.config') }}
           restore-keys: |
             ${{ runner.os }}-nx30pro-
 
-      - name: 执行 diy-part1
+      - name: 执行 diy-part1.sh
         run: |
           set -eo pipefail
-          [ -e $GITHUB_WORKSPACE/$FEEDS_CONF ] && cp $GITHUB_WORKSPACE/$FEEDS_CONF feeds.conf.default
-          chmod +x $GITHUB_WORKSPACE/$DIY_P1_SH
-          $GITHUB_WORKSPACE/$DIY_P1_SH
+          cd $BUILD_DIR
+          [ -e $CONF_WORKSPACE/$FEEDS_CONF ] && cp $CONF_WORKSPACE/$FEEDS_CONF feeds.conf.default
+          chmod +x $CONF_WORKSPACE/$DIY_P1_SH
+          $CONF_WORKSPACE/$DIY_P1_SH
 
       - name: 更新 feeds
         run: |
           set -eo pipefail
+          cd $BUILD_DIR
           ./scripts/feeds update -a || (sleep 10 && ./scripts/feeds update -a)
 
       - name: 安装 feeds
         run: |
           set -eo pipefail
+          cd $BUILD_DIR
           ./scripts/feeds install -a
 
-      - name: 执行 diy-part2
+      - name: 执行 diy-part2.sh
         run: |
           set -eo pipefail
-          [ -d $GITHUB_WORKSPACE/files ] && cp -r $GITHUB_WORKSPACE/files ./
-          [ -e $GITHUB_WORKSPACE/$CONFIG_FILE ] && cp $GITHUB_WORKSPACE/$CONFIG_FILE .config
+          cd $BUILD_DIR
+          [ -d $CONF_WORKSPACE/files ] && cp -r $CONF_WORKSPACE/files ./
+          [ -e $CONF_WORKSPACE/$CONFIG_FILE ] && cp $CONF_WORKSPACE/$CONFIG_FILE .config
           echo "CONFIG_CCACHE=y" >> .config
-          chmod +x $GITHUB_WORKSPACE/$DIY_P2_SH
-          $GITHUB_WORKSPACE/$DIY_P2_SH
+          chmod +x $CONF_WORKSPACE/$DIY_P2_SH
+          $CONF_WORKSPACE/$DIY_P2_SH
           make defconfig
 
-      - name: 预下dl包
+      - name: 预下载dl包
         id: package
         run: |
           set -eo pipefail
+          cd $BUILD_DIR
           make download -j8
           find dl -size -1024c -exec rm -f {} \;
 
@@ -114,8 +117,9 @@ jobs:
         id: compile
         run: |
           set -eo pipefail
+          cd $BUILD_DIR
           echo "开始编译，CPU核心：$(nproc)"
-          make -j$(nproc) || make -j1 V=s
+          make -j4 || make -j1 V=s
           echo "status=success" >> $GITHUB_OUTPUT
           grep '^CONFIG_TARGET.*DEVICE.*=y' .config | sed -r 's/.*DEVICE_(.*)=y/\1/' > DEVICE_NAME
           [ -s DEVICE_NAME ] && echo "DEVICE_NAME=_$(cat DEVICE_NAME)" >> $GITHUB_ENV
@@ -128,7 +132,7 @@ jobs:
           name: OpenWrt_bin${{ env.DEVICE_NAME }}${{ env.FILE_DATE }}
           path: ${{ env.BUILD_DIR }}/bin
 
-      - name: 筛选固件
+      - name: 筛选固件，清理无用文件
         id: organize
         if: env.UPLOAD_FIRMWARE == 'true' && steps.compile.outputs.status == 'success'
         run: |
@@ -136,15 +140,15 @@ jobs:
           cd $BUILD_DIR/bin/targets/*/*
           find . \( -name "*buildinfo*" -o -name "*sha256sums*" -o -name "*manifest*" -o -name "*json*" -o -name "*kernel.bin*" \) -exec rm -rf {} +
           rm -rf packages
-          echo "FIRMWARE=$PWD" >> $GITHUB_ENV
+          echo "FIRMWARE_DIR=$PWD" >> $GITHUB_ENV
           echo "status=success" >> $GITHUB_OUTPUT
 
-      - name: 固件打包上传Artifact
+      - name: 固件上传Artifact
         uses: actions/upload-artifact@v6
         if: steps.organize.outputs.status == 'success'
         with:
           name: OpenWrt_firmware${{ env.DEVICE_NAME }}${{ env.FILE_DATE }}
-          path: ${{ env.FIRMWARE }}
+          path: ${{ env.FIRMWARE_DIR }}
 
       - name: 生成Release标签
         id: tag
@@ -160,22 +164,28 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG_NAME: ${{ steps.tag.outputs.release_tag }}
-          FIRMWARE_DIR: ${{ env.FIRMWARE }}
+          FIRMWARE_DIR: ${{ env.FIRMWARE_DIR }}
         run: |
           set -eo pipefail
-          BODY=$(cat <<EOF
-          📶 设备：H3C NX30PRO (MT7981)
+          cd "${FIRMWARE_DIR}"
+          # 先收集固件文件列表，gh release create 不能直接带*
+          FIRM_FILES=()
+          for f in *; do
+            [ -f "$f" ] && FIRM_FILES+=("$f")
+          done
+          if [ ${#FIRM_FILES[@]} -eq 0 ]; then
+            echo "❌ 没有找到固件文件，跳过release发布"
+            exit 1
+          fi
+          gh release create "${TAG_NAME}" \
+            --title "H3C NX30PRO OpenWrt ${TAG_NAME}" \
+            --notes "📶 设备：H3C NX30PRO (MT7981)
           🧱 源码：immortalwrt‑mt798x openwrt‑21.02
           ⚙️ 开启CCACHE加速编译
           🔗 默认后台：http://192.168.1.1
           👤 用户：root
-          🔑 密码：password
-          EOF
-                    )
-                    gh release create "${TAG_NAME}" \
-                    --title "H3C NX30PRO OpenWrt ${TAG_NAME}" \
-                    --notes "${BODY}" \
-                    "${FIRMWARE_DIR}"/*
+          🔑 密码：password" \
+            "${FIRM_FILES[@]}"
 
       - name: 清理旧Workflow运行记录
         if: steps.compile.outputs.status == 'success'
@@ -203,14 +213,14 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          set +e
+          set -eo pipefail
           RELEASES=$(gh release list --limit 100 --json tagName,publishedAt --jq 'sort_by(.publishedAt) | reverse | .[3:] | .[].tagName')
           if [[ -z "$RELEASES" ]]; then
-            echo "Release数量不足3个，无需删除"
+            echo "✅ Release数量不足3个，无需删除"
             exit 0
           fi
-          for tag in $RELEASES; do
+          echo "$RELEASES" | while read -r tag; do
+            echo "删除旧release: $tag"
             gh release delete "$tag" -y
-            git push origin --delete "$tag"
+            git push origin --delete "$tag" || echo "tag远程已经不存在，跳过"
           done
-          exit 0
