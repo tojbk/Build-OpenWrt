@@ -162,29 +162,47 @@ jobs:
           echo "status=success" >> $GITHUB_OUTPUT
 
       - name: 发布Release
-        uses: softprops/action-gh-release@v2
         if: steps.tag.outputs.status == 'success'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ steps.tag.outputs.release_tag }}
-          name: H3C NX30PRO OpenWrt ${{ steps.tag.outputs.release_tag }}
-          body: |
-            📶 设备：H3C NX30PRO (MT7981)
-            🧱 源码：immortalwrt-mt798x openwrt-21.02
-            🔗 默认后台：http://192.168.1.1
-            👤 用户：root
-            🔑 密码：password
-          files: ${{ env.FIRMWARE }}/*
-          draft: false
-          prerelease: false
+          TAG_NAME: ${{ steps.tag.outputs.release_tag }}
+          FIRMWARE_DIR: ${{ env.FIRMWARE }}
+        run: |
+          set -eo pipefail
+          BODY=$(cat <<EOF
+          📶 设备：H3C NX30PRO (MT7981)
+          🧱 源码：immortalwrt‑mt798x openwrt‑21.02
+          ⚙️ 开启CCACHE加速编译
+          🔗 默认后台：http://192.168.1.1
+          👤 用户：root
+          🔑 密码：password
+          EOF
+                    )
+                    gh release create "${TAG_NAME}" \
+                    --title "H3C NX30PRO OpenWrt ${TAG_NAME}" \
+                    --notes "${BODY}" \
+                    "${FIRMWARE_DIR}"/*
 
       - name: 清理旧Workflow运行记录
         if: steps.compile.outputs.status == 'success'
-        uses: Mattraks/delete-workflow-runs@v2
-        with:
-          retain_days: 1
-          keep_minimum_runs: 2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -eo pipefail
+          WF_NAME="${{ github.workflow }}"
+          RUNS=$(gh run list --workflow "${WF_NAME}" --limit 100 --json databaseId,createdAt,status)
+          echo "$RUNS" | jq -r '
+            .[2:] |
+            map(select(
+              (.createdAt | fromdateiso8601) < (now - 86400)
+            )) |
+            .[].databaseId
+          ' | while read -r rid; do
+              if [ -n "$rid" ]; then
+                echo "删除运行记录: $rid"
+                gh run delete "$rid"
+              fi
+            done
 
       - name: 删除旧Release（保留最新3个）
         if: env.UPLOAD_RELEASE == 'true' && steps.compile.outputs.status == 'success'
