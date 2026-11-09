@@ -37,7 +37,7 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
 
-    - name: 释放空间 + 安装编译依赖
+    - name: 释放空间 + 安装编译依赖（ophub）
       run: |
         # 清理docker镜像（无镜像时不执行）
         docker images -q | xargs -r docker rmi -f 2>/dev/null || true
@@ -59,14 +59,13 @@ jobs:
         # 卸载预装冗余包
         sudo apt-get -y purge azure-cli ghc* zulu* llvm* firefox google* dotnet* powershell openjdk* mongodb* moby* || true
 
-        # 安全拉取 ophub 依赖列表，防止curl空结果导致apt卡死
+        # 安全拉取ophub依赖列表，防止curl空结果导致apt卡死
         DEPS=$(curl -fsSL --connect-timeout 15 https://ophub.org/ubuntu2404-make-openwrt-depends)
         if [[ -n "${DEPS}" ]]; then
           sudo apt-get -y install ${DEPS}
         fi
 
         sudo systemctl daemon-reload
-        # sudo apt-get -y full-upgrade
         sudo apt-get -y autoremove --purge
         sudo apt-get clean
 
@@ -74,26 +73,26 @@ jobs:
         sudo sed -i '/NVM_DIR/d;/skel/d' /root/{.bashrc,.profile}
         sed -i '/NVM_DIR/d;/skel/d' ~/.bashrc ~/.profile 2>/dev/null
 
-        # 打印剩余空间
+        # 打印剩余空间，方便看效果
         df -hT
         free -h
 
     - name: 下载源码
       run: |
-        mkdir -p /workdir
-        cd /workdir
+        mkdir -p ${HOME}/workdir
+        cd ${HOME}/workdir
         df -hT $PWD
-        git clone $REPO_URL -b $REPO_BRANCH openwrt
-        ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
+        git clone --depth=1 -b $REPO_BRANCH $REPO_URL openwrt
+        ln -sf ${HOME}/workdir/openwrt $GITHUB_WORKSPACE/openwrt
 
     - name: 加载缓存
       uses: actions/cache@v5
       with:
         path: |
-          /workdir/openwrt/dl
-          /workdir/openwrt/build_dir
-          /workdir/openwrt/staging_dir
-          /workdir/openwrt/ccache
+          ${{ env.HOME }}/workdir/openwrt/dl
+          ${{ env.HOME }}/workdir/openwrt/build_dir
+          ${{ env.HOME }}/workdir/openwrt/staging_dir
+          ${{ env.HOME }}/workdir/openwrt/ccache
         key: ${{ runner.os }}-openwrt-${{ hashFiles('**/feeds.conf.default','**/.config') }}
         restore-keys: |
           ${{ runner.os }}-openwrt-
@@ -183,8 +182,9 @@ jobs:
           📦 固件编译时间：${{ steps.tag.outputs.release_tag }}
           📶 设备：H3C NX30PRO (MT7981)
           🧱 源码：immortalwrt-mt798x openwrt-21.02
-          🖥️ 编译环境：Ubuntu 24.04
-          🔗 默认访问地址：http://192.168.123.1
+          🖥️ 编译环境：Ubuntu 24.04 + ophub依赖
+          ---
+          🔗 默认后台地址：http://192.168.1.1
           👤 默认用户名：root
           🔑 默认密码：password
         files: ${{ env.FIRMWARE }}/*
@@ -195,13 +195,17 @@ jobs:
         retain_days: 1
         keep_minimum_runs: 2
 
-    - name: 删除旧Release（保留最新2个）
+    - name: 删除旧Release（保留最新3个）
       if: env.UPLOAD_RELEASE == 'true' && !cancelled()
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        # 获取所有release，按发布时间排序，跳过最新2个，其余删除
-        RELEASES=$(gh release list --limit 100 --json tagName,publishedAt --jq 'sort_by(.publishedAt) | reverse | .[2:] | .[].tagName')
+        # 获取所有release，按发布时间排序，跳过最新3个，其余删除
+        RELEASES=$(gh release list --limit 100 --json tagName,publishedAt --jq 'sort_by(.publishedAt) | reverse | .[3:] | .[].tagName')
+        if [[ -z "$RELEASES" ]]; then
+          echo "Release数量不足3个，无需删除"
+          exit 0
+        fi
         for tag in $RELEASES; do
           gh release delete "$tag" -y
           git push origin --delete "$tag"
