@@ -1,15 +1,3 @@
-#
-# https://github.com/P3TERX/Actions-OpenWrt
-#
-# File: .github/workflows/openwrt-bulder.yml
-# Description: Build OpenWrt using GitHub Actions
-#
-# Copyright (c) 2019-2024 P3TERX <https://p3terx.com>
-#
-# This is free software, licensed under the MIT License.
-# See /LICENSE for more information.
-#
-
 name: H3C NX30PRO
 
 on:
@@ -27,186 +15,195 @@ env:
   UPLOAD_FIRMWARE: true
   UPLOAD_RELEASE: true
   TZ: Asia/Shanghai
+  BUILD_DIR: $HOME/build/openwrt
+  USE_CCACHE: 1
+  CCACHE_DIR: $HOME/build/openwrt/ccache
+
+  TAG_PREFIX: "NX30PRO-"
 
 jobs:
   build:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
     permissions:
       contents: write
     steps:
-    - name: Checkout
-      uses: actions/checkout@v4
+      - name: Checkout 仓库配置
+        uses: actions/checkout@v4
 
-    - name: 释放空间 + 安装编译依赖（ophub）
-      run: |
-        # 清理docker镜像（无镜像时不执行）
-        docker images -q | xargs -r docker rmi -f 2>/dev/null || true
+      - name: 系统初始化 + 释放磁盘空间
+        run: |
+          set -eo pipefail
+          # 禁用swap
+          sudo swapoff -a
+          sudo rm -f /swapfile /mnt/swapfile
+          # 清理冗余大文件
+          docker images -q | xargs -r docker rmi -f 2>/dev/null || true
+          [[ -n "${AGENT_TOOLSDIRECTORY}" ]] && sudo rm -rf "${AGENT_TOOLSDIRECTORY}" || true
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android ~/.cargo ~/.dotnet ~/.rustup /opt/ghc 2>/dev/null || true
+          # apt优化，不装文档、推荐包
+          sudo apt-get -y update
+          sudo apt-get -y purge azure-cli ghc* zulu* llvm* firefox google* dotnet* powershell openjdk* mongodb* moby* || true
+          sudo apt-get -y install apt-transport-https ca-certificates
+          sudo apt-get -y autoremove --purge || true
+          sudo apt-get clean
+          # 打印资源
+          df -hT
+          free -h
 
-        # 清理agent工具目录
-        [[ -n "${AGENT_TOOLSDIRECTORY}" ]] && sudo rm -rf "${AGENT_TOOLSDIRECTORY}"
+      - name: 安装 OpenWrt 编译依赖
+        run: |
+          set -eo pipefail
+          DEPS=$(curl -fsSL --connect-timeout 15 https://ophub.org/ubuntu2204-make-openwrt-depends)
+          if [[ -n "${DEPS}" ]]; then
+            sudo apt-get -y install ${DEPS}
+          fi
 
-        # 清理大体积目录
-        sudo rm -rf /usr/share/dotnet /usr/local/lib/android 2>/dev/null
-        sudo rm -rf ~/.cargo ~/.dotnet ~/.rustup 2>/dev/null
+      - name: 拉取源码（浅克隆，只拉目标分支）
+        run: |
+          set -eo pipefail
+          mkdir -p $BUILD_DIR
+          cd $BUILD_DIR
+          git config --global http.postBuffer 524288000
+          git config --global http.timeout 300
+          git clone --depth=1 --single-branch -b $REPO_BRANCH $REPO_URL .
+          ln -sf $BUILD_DIR $GITHUB_WORKSPACE/openwrt
+          echo "源码拉取完成"
 
-        # 关闭swap
-        sudo swapoff -a
-        sudo rm -f /swapfile /mnt/swapfile
+      - name: 缓存 dl / build_dir / staging_dir / ccache
+        uses: actions/cache@v5
+        with:
+          path: |
+            ${{ env.BUILD_DIR }}/dl
+            ${{ env.BUILD_DIR }}/build_dir
+            ${{ env.BUILD_DIR }}/staging_dir
+            ${{ env.CCACHE_DIR }}
+          key: ${{ runner.os }}-nx30pro-${{ hashFiles('**/feeds.conf.default','**/.config') }}
+          restore-keys: |
+            ${{ runner.os }}-nx30pro-
 
-        # 更新源
-        sudo apt-get -y update
+      - name: 执行 diy-part1
+        run: |
+          set -eo pipefail
+          cd $BUILD_DIR
+          [ -e $GITHUB_WORKSPACE/$FEEDS_CONF ] && cp $GITHUB_WORKSPACE/$FEEDS_CONF feeds.conf.default
+          chmod +x $GITHUB_WORKSPACE/$DIY_P1_SH
+          $GITHUB_WORKSPACE/$DIY_P1_SH
 
-        # 卸载预装冗余包
-        sudo apt-get -y purge azure-cli ghc* zulu* llvm* firefox google* dotnet* powershell openjdk* mongodb* moby* || true
+      - name: 更新 feeds（失败自动重试一次）
+        run: |
+          set -eo pipefail
+          cd $BUILD_DIR
+          ./scripts/feeds update -a || (sleep 10 && ./scripts/feeds update -a)
 
-        # 安全拉取ophub依赖列表，防止curl空结果导致apt卡死
-        DEPS=$(curl -fsSL --connect-timeout 15 https://ophub.org/ubuntu2404-make-openwrt-depends)
-        if [[ -n "${DEPS}" ]]; then
-          sudo apt-get -y install ${DEPS}
-        fi
+      - name: 安装 feeds
+        run: |
+          set -eo pipefail
+          cd $BUILD_DIR
+          ./scripts/feeds install -a
 
-        sudo systemctl daemon-reload
-        sudo apt-get -y autoremove --purge
-        sudo apt-get clean
+      - name: 执行 diy-part2 + 导入配置、files
+        run: |
+          set -eo pipefail
+          cd $BUILD_DIR
+          [ -d $GITHUB_WORKSPACE/files ] && cp -r $GITHUB_WORKSPACE/files ./
+          [ -e $GITHUB_WORKSPACE/$CONFIG_FILE ] && cp $GITHUB_WORKSPACE/$CONFIG_FILE .config
+          chmod +x $GITHUB_WORKSPACE/$DIY_P2_SH
+          $GITHUB_WORKSPACE/$DIY_P2_SH
+          make defconfig
 
-        # 清理nvm相关配置
-        sudo sed -i '/NVM_DIR/d;/skel/d' /root/{.bashrc,.profile}
-        sed -i '/NVM_DIR/d;/skel/d' ~/.bashrc ~/.profile 2>/dev/null
+      - name: 预下载源码包
+        id: package
+        run: |
+          set -eo pipefail
+          cd $BUILD_DIR
+          make download -j8
+          find dl -size -1024c -exec rm -f {} \;
 
-        # 打印剩余空间，方便看效果
-        df -hT
-        free -h
+      - name: 编译固件
+        id: compile
+        run: |
+          set -eo pipefail
+          cd $BUILD_DIR
+          echo "开始编译，CPU核心：$(nproc)"
+          make -j$(nproc) || make -j1 V=s
+          echo "status=success" >> $GITHUB_OUTPUT
+          grep '^CONFIG_TARGET.*DEVICE.*=y' .config | sed -r 's/.*DEVICE_(.*)=y/\1/' > DEVICE_NAME
+          [ -s DEVICE_NAME ] && echo "DEVICE_NAME=_$(cat DEVICE_NAME)" >> $GITHUB_ENV
+          echo "FILE_DATE=_$(date +"%Y%m%d%H%M")" >> $GITHUB_ENV
 
-    - name: 下载源码
-      run: |
-        mkdir -p ${HOME}/workdir
-        cd ${HOME}/workdir
-        df -hT $PWD
-        git clone --depth=1 -b $REPO_BRANCH $REPO_URL openwrt
-        ln -sf ${HOME}/workdir/openwrt $GITHUB_WORKSPACE/openwrt
+      - name: 上传bin完整目录（可选）
+        uses: actions/upload-artifact@v5
+        if: steps.compile.outputs.status == 'success' && env.UPLOAD_BIN_DIR == 'true'
+        with:
+          name: OpenWrt_bin${{ env.DEVICE_NAME }}${{ env.FILE_DATE }}
+          path: ${{ env.BUILD_DIR }}/bin
 
-    - name: 加载缓存
-      uses: actions/cache@v5
-      with:
-        path: |
-          ${{ env.HOME }}/workdir/openwrt/dl
-          ${{ env.HOME }}/workdir/openwrt/build_dir
-          ${{ env.HOME }}/workdir/openwrt/staging_dir
-          ${{ env.HOME }}/workdir/openwrt/ccache
-        key: ${{ runner.os }}-openwrt-${{ hashFiles('**/feeds.conf.default','**/.config') }}
-        restore-keys: |
-          ${{ runner.os }}-openwrt-
+      - name: 筛选固件、清理多余文件
+        id: organize
+        if: env.UPLOAD_FIRMWARE == 'true' && steps.compile.outputs.status == 'success'
+        run: |
+          set -eo pipefail
+          cd $BUILD_DIR/bin/targets/*/*
+          find . \( -name "*buildinfo*" -o -name "*sha256sums*" -o -name "*manifest*" -o -name "*json*" -o -name "*kernel.bin*" \) -exec rm -rf {} +
+          rm -rf packages
+          echo "FIRMWARE=$PWD" >> $GITHUB_ENV
+          echo "status=success" >> $GITHUB_OUTPUT
 
-    - name: 加载设置 diy-part1
-      run: |
-        [ -e $FEEDS_CONF ] && mv $FEEDS_CONF openwrt/feeds.conf.default
-        chmod +x $DIY_P1_SH
-        cd openwrt
-        $GITHUB_WORKSPACE/$DIY_P1_SH
+      - name: 固件打包上传Artifact
+        uses: actions/upload-artifact@v5
+        if: steps.organize.outputs.status == 'success'
+        with:
+          name: OpenWrt_firmware${{ env.DEVICE_NAME }}${{ env.FILE_DATE }}
+          path: ${{ env.FIRMWARE }}
 
-    - name: 更新feeds
-      run: cd openwrt && ./scripts/feeds update -a
+      - name: 生成Release标签
+        id: tag
+        if: env.UPLOAD_RELEASE == 'true' && steps.compile.outputs.status == 'success'
+        run: |
+          set -eo pipefail
+          TAG_NAME="${{ env.TAG_PREFIX }}$(date +"%Y.%m.%d-%H%M")"
+          echo "release_tag=${TAG_NAME}" >> $GITHUB_OUTPUT
+          echo "status=success" >> $GITHUB_OUTPUT
 
-    - name: 安装feeds
-      run: cd openwrt && ./scripts/feeds install -a
+      - name: 发布Release
+        uses: softprops/action-gh-release@v2
+        if: steps.tag.outputs.status == 'success'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.tag.outputs.release_tag }}
+          name: H3C NX30PRO OpenWrt ${{ steps.tag.outputs.release_tag }}
+          body: |
+            📶 设备：H3C NX30PRO (MT7981)
+            🧱 源码：immortalwrt-mt798x openwrt-21.02
+            🔗 默认后台：http://192.168.1.1
+            👤 用户：root
+            🔑 密码：password
+          files: ${{ env.FIRMWARE }}/*
+          draft: false
+          prerelease: false
 
-    - name: 加载配置 diy-part2
-      run: |
-        [ -e files ] && mv files openwrt/files
-        [ -e $CONFIG_FILE ] && mv $CONFIG_FILE openwrt/.config
-        chmod +x $DIY_P2_SH
-        cd openwrt
-        $GITHUB_WORKSPACE/$DIY_P2_SH
+      # ✅ 重点：只有编译成功才清理日志、旧release！编译失败保留日志排错
+      - name: 清理旧Workflow运行记录
+        if: steps.compile.outputs.status == 'success'
+        uses: Mattraks/delete-workflow-runs@v2
+        with:
+          retain_days: 1
+          keep_minimum_runs: 2
 
-    - name: 下载dl包
-      id: package
-      run: |
-        cd openwrt
-        make defconfig
-        make download -j8
-        find dl -size -1024c -exec ls -l {} \;
-        find dl -size -1024c -exec rm -f {} \;
-
-    - name: 编译固件
-      id: compile
-      run: |
-        cd openwrt
-        echo -e "$(nproc) thread compile"
-        make -j$(nproc) || make -j1 V=s
-        echo "status=success" >> $GITHUB_OUTPUT
-        grep '^CONFIG_TARGET.*DEVICE.*=y' .config | sed -r 's/.*DEVICE_(.*)=y/\1/' > DEVICE_NAME
-        [ -s DEVICE_NAME ] && echo "DEVICE_NAME=_$(cat DEVICE_NAME)" >> $GITHUB_ENV
-        echo "FILE_DATE=_$(date +"%Y%m%d%H%M")" >> $GITHUB_ENV
-
-    - name: 上传bin目录
-      uses: actions/upload-artifact@v5
-      if: steps.compile.outputs.status == 'success' && env.UPLOAD_BIN_DIR == 'true'
-      with:
-        name: OpenWrt_bin${{ env.DEVICE_NAME }}${{ env.FILE_DATE }}
-        path: openwrt/bin
-
-    - name: 整理固件文件
-      id: organize
-      if: env.UPLOAD_FIRMWARE == 'true' && !cancelled()
-      run: |
-        cd openwrt/bin/targets/*/*
-        # 如需factory.bin，删掉下面这一行里 factory.bin
-        find . \( -name "*buildinfo*" -o -name "*sha256sums*" -o -name "*manifest*" -o -name "*json*" -o -name "*kernel.bin*" \) -exec rm -rf {} +
-        rm -rf packages
-        echo "FIRMWARE=$PWD" >> $GITHUB_ENV
-        echo "status=success" >> $GITHUB_OUTPUT
-
-    - name: 上传固件artifact
-      uses: actions/upload-artifact@v5
-      if: steps.organize.outputs.status == 'success' && !cancelled()
-      with:
-        name: OpenWrt_firmware${{ env.DEVICE_NAME }}${{ env.FILE_DATE }}
-        path: ${{ env.FIRMWARE }}
-
-    - name: 生成release标签
-      id: tag
-      if: env.UPLOAD_RELEASE == 'true' && !cancelled()
-      run: |
-        echo "release_tag=$(date +"%Y.%m.%d-%H%M")" >> $GITHUB_OUTPUT
-        echo "status=success" >> $GITHUB_OUTPUT
-
-    - name: 发布固件到Release
-      uses: softprops/action-gh-release@v2
-      if: steps.tag.outputs.status == 'success' && !cancelled()
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: ${{ steps.tag.outputs.release_tag }}
-        name: H3C NX30PRO OpenWrt ${{ steps.tag.outputs.release_tag }}
-        body: |
-          📦 固件编译时间：${{ steps.tag.outputs.release_tag }}
-          📶 设备：H3C NX30PRO (MT7981)
-          🧱 源码：immortalwrt-mt798x openwrt-21.02
-          🖥️ 编译环境：Ubuntu 24.04 + ophub依赖
-          ---
-          🔗 默认后台地址：http://192.168.1.1
-          👤 默认用户名：root
-          🔑 默认密码：password
-        files: ${{ env.FIRMWARE }}/*
-
-    - name: 删除旧Workflow记录
-      uses: Mattraks/delete-workflow-runs@v2
-      with:
-        retain_days: 1
-        keep_minimum_runs: 2
-
-    - name: 删除旧Release（保留最新3个）
-      if: env.UPLOAD_RELEASE == 'true' && !cancelled()
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        # 获取所有release，按发布时间排序，跳过最新3个，其余删除
-        RELEASES=$(gh release list --limit 100 --json tagName,publishedAt --jq 'sort_by(.publishedAt) | reverse | .[3:] | .[].tagName')
-        if [[ -z "$RELEASES" ]]; then
-          echo "Release数量不足3个，无需删除"
+      - name: 删除旧Release（保留最新3个）
+        if: env.UPLOAD_RELEASE == 'true' && steps.compile.outputs.status == 'success'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set +e
+          RELEASES=$(gh release list --limit 100 --json tagName,publishedAt --jq 'sort_by(.publishedAt) | reverse | .[3:] | .[].tagName')
+          if [[ -z "$RELEASES" ]]; then
+            echo "Release数量不足3个，无需删除"
+            exit 0
+          fi
+          for tag in $RELEASES; do
+            gh release delete "$tag" -y
+            git push origin --delete "$tag"
+          done
           exit 0
-        fi
-        for tag in $RELEASES; do
-          gh release delete "$tag" -y
-          git push origin --delete "$tag"
-        done
