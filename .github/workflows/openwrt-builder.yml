@@ -40,39 +40,61 @@ jobs:
     - name: 系统初始化
       env:
         DEBIAN_FRONTEND: noninteractive
+        TZ: Asia/Shanghai
       run: |
+        set -euo pipefail
+      
+        # 清理docker镜像
         docker rmi -f $(docker images -q) 2>/dev/null || true
-        [[ -n "${AGENT_TOOLSDIRECTORY}" ]] && sudo rm -rf "${AGENT_TOOLSDIRECTORY}"
+        sudo docker image prune -a -f
+        # 清理runner预装大体积工具
+        [[ -n "${AGENT_TOOLSDIRECTORY:-}" ]] && sudo rm -rf "${AGENT_TOOLSDIRECTORY}"
         sudo rm -rf /usr/share/dotnet /usr/local/lib/android 2>/dev/null
+        # 关闭swap
         sudo swapoff -a
         sudo rm -f /swapfile /mnt/swapfile
-        sudo docker image prune -a -f
-        sudo systemctl stop docker
+        # 停止docker、调整snap
+        sudo systemctl stop docker || true
         sudo snap set system refresh.retain=2
-        sudo rm -rf /usr/share/dotnet /etc/apt/sources.list.d /usr/local/lib/android 2>/dev/null
+        # 清理root环境配置
         sudo sed -i '/NVM_DIR/d;/skel/d' /root/{.bashrc,.profile}
-        sudo -E apt -y purge azure-cli ghc* zulu* texlive* firefox google* dotnet* powershell openjdk* mongodb* moby* || true
-        [[ -n "${AGENT_TOOLSDIRECTORY}" ]] && sudo rm -rf "${AGENT_TOOLSDIRECTORY}"
+        # 批量卸载不需要的预装包
+        sudo -E apt -y purge \
+        azure-cli ghc* zulu* texlive* firefox google* dotnet* \
+        powershell openjdk* mongodb* moby* || true
+        # 更新源、安装OpenWrt编译依赖
         sudo -E apt update
         sudo -E apt -y install $(curl -fsSL https://ophub.org/ubuntu2204-make-openwrt-depends)
         sudo -E apt-get -qq install libfuse-dev
+        # apt垃圾回收
         sudo -E apt -y autoremove --purge
-        sudo -E systemctl daemon-reload
         sudo -E apt clean && sudo -E apt autoclean
+        sudo systemctl daemon-reload || true
+        # 设置时区
         sudo timedatectl set-timezone "$TZ"
+        # 自动获取空闲loop设备
+        LOOP1=$(sudo losetup -f)
+        LOOP2=$(sudo losetup -f)
+        # 计算可用空间（保留原有逻辑，预留安全空间）
         mnt_size=$(expr $(df -h /mnt | tail -1 | awk '{print $4}' | sed 's/[[:alpha:]]//g' | sed 's/\..*//') - 1)
         root_size=$(expr $(df -h / | tail -1 | awk '{print $4}' | sed 's/[[:alpha:]]//g' | sed 's/\..*//') - 4)
+        # 生成稀疏镜像文件
         sudo truncate -s "${mnt_size}"G /mnt/mnt.img
         sudo truncate -s "${root_size}"G /root.img
-        sudo losetup /dev/loop6 /mnt/mnt.img
-        sudo losetup /dev/loop7 /root.img
-        sudo pvcreate /dev/loop6
-        sudo pvcreate /dev/loop7
-        sudo vgcreate github /dev/loop6 /dev/loop7
+        # 绑定loop
+        sudo losetup "${LOOP1}" /mnt/mnt.img
+        sudo losetup "${LOOP2}" /root.img
+        # LVM创建
+        sudo pvcreate "${LOOP1}"
+        sudo pvcreate "${LOOP2}"
+        sudo vgcreate github "${LOOP1}" "${LOOP2}"
         sudo lvcreate -n runner -l 100%FREE github
+        # 格式化XFS
         sudo mkfs.xfs /dev/github/runner
+        # 创建工作目录并挂载（重点补上）
         sudo mkdir -p /workdir
-        sudo chown $USER:$GROUPS /workdir
+        sudo mount /dev/github/runner /workdir
+        sudo chown "$USER:$(id -g -n "$USER")" /workdir
         df -hT
         free -h
 
