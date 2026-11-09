@@ -27,7 +27,7 @@ jobs:
       contents: write
     steps:
       - name: 仓库配置
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: 系统初始化 + 释放磁盘空间
         run: |
@@ -128,7 +128,7 @@ jobs:
           echo "FILE_DATE=_$(date +"%Y%m%d%H%M")" >> $GITHUB_ENV
 
       - name: 上传bin目录
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         if: steps.compile.outputs.status == 'success' && env.UPLOAD_BIN_DIR == 'true'
         with:
           name: OpenWrt_bin${{ env.DEVICE_NAME }}${{ env.FILE_DATE }}
@@ -146,7 +146,7 @@ jobs:
           echo "status=success" >> $GITHUB_OUTPUT
 
       - name: 固件打包上传Artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         if: steps.organize.outputs.status == 'success'
         with:
           name: OpenWrt_firmware${{ env.DEVICE_NAME }}${{ env.FILE_DATE }}
