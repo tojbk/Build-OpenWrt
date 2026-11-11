@@ -206,7 +206,7 @@ jobs:
           👤 默认用户名：root
           🔑 默认密码：password
           📝 更新说明
-           • OpenClash v0.48.002
+            • OpenClash v0.48.002
         files: ${{ env.FIRMWARE }}/*
 
     - name: 删除旧Workflow记录
