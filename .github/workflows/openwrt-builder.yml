@@ -169,8 +169,7 @@ jobs:
       if: env.UPLOAD_FIRMWARE == 'true' && !cancelled()
       run: |
         cd openwrt/bin/targets/*/*
-        # 如需factory.bin，删掉下面这一行里 factory.bin
-        find . \( -name "*buildinfo*" -o -name "*sha256sums*" -o -name "*manifest*" -o -name "*json*" -o -name "*kernel.bin*" \) -exec rm -rf {} +
+        find . \( -name "*buildinfo*" -o -name "*sha256sums*" -o -name "*manifest*" -o -name "*json*" -o -name "*kernel.bin*" -o -name "*factory.bin*" \) -exec rm -rf {} +
         rm -rf packages
         echo "FIRMWARE=$PWD" >> $GITHUB_ENV
         echo "status=success" >> $GITHUB_OUTPUT
@@ -214,7 +213,7 @@ jobs:
       uses: Mattraks/delete-workflow-runs@v2
       with:
         retain_days: 1
-        keep_minimum_runs: 2
+        keep_minimum_runs: 3
 
     - name: 删除旧Release（保留最新2个）
       if: env.UPLOAD_RELEASE == 'true' && !cancelled()
