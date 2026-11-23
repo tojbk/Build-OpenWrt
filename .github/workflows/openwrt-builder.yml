@@ -1,15 +1,3 @@
-#
-# https://github.com/P3TERX/Actions-OpenWrt
-#
-# File: .github/workflows/openwrt-bulder.yml
-# Description: Build OpenWrt using GitHub Actions
-#
-# Copyright (c) 2019-2024 P3TERX <https://p3terx.com>
-#
-# This is free software, licensed under the MIT License.
-# See /LICENSE for more information.
-#
-
 name: H3C NX30PRO
 
 on:
@@ -46,7 +34,6 @@ jobs:
       id: init
       env:
         DEBIAN_FRONTEND: noninteractive
-        TZ: Asia/Shanghai
       run: |
         # docker rmi `docker images -q`
         sudo swapoff -a
@@ -67,6 +54,9 @@ jobs:
         sudo timedatectl set-timezone "$TZ"
         echo "status=success" >> ${GITHUB_OUTPUT}
         df -Th
+
+    - name: 创建虚拟磁盘
+      run: |
         mnt_size=$(expr $(df -h /mnt | tail -1 | awk '{print $4}' | sed 's/[[:alpha:]]//g' | sed 's/\..*//') - 1)
         root_size=$(expr $(df -h / | tail -1 | awk '{print $4}' | sed 's/[[:alpha:]]//g' | sed 's/\..*//') - 4)
         sudo truncate -s "${mnt_size}"G /mnt/mnt.img
