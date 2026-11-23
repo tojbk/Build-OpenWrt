@@ -49,61 +49,40 @@ jobs:
         TZ: Asia/Shanghai
       run: |
         set -euo pipefail
-
-        # 清理docker镜像
-        docker rmi -f $(docker images -q) 2>/dev/null || true
-        sudo docker image prune -a -f
-        # 清理runner预装大体积工具
-        [[ -n "${AGENT_TOOLSDIRECTORY:-}" ]] && sudo rm -rf "${AGENT_TOOLSDIRECTORY}"
-        sudo rm -rf /usr/share/dotnet /usr/local/lib/android 2>/dev/null
-        # 关闭swap
+        docker rmi `docker images -q`
         sudo swapoff -a
         sudo rm -f /swapfile /mnt/swapfile
-        # 停止docker、调整snap
-        sudo systemctl stop docker || true
+        sudo docker image prune -a -f
+        sudo systemctl stop docker
         sudo snap set system refresh.retain=2
-        # 清理root环境配置
+        sudo rm -rf /usr/share/dotnet /etc/apt/sources.list.d /usr/local/lib/android 2>/dev/null
         sudo sed -i '/NVM_DIR/d;/skel/d' /root/{.bashrc,.profile}
-        # 批量卸载不需要的预装包
-        sudo -E apt -y purge \
-        azure-cli ghc* zulu* texlive* firefox google* dotnet* \
-        powershell openjdk* mongodb* moby* || true
-        # 更新源、安装OpenWrt编译依赖
-        # NOTE: 依赖列表来自外部脚本，未锁定版本。如需完全可复现，
-        # 请把列表 vendor 到仓库里，代替每次 curl。
+        sudo -E apt -y purge azure-cli ghc* zulu* texlive* firefox google* dotnet* powershell openjdk* mongodb* moby* || true
+        [[ -n "${AGENT_TOOLSDIRECTORY}" ]] && sudo rm -rf "${AGENT_TOOLSDIRECTORY}"
         sudo -E apt update
         sudo -E apt -y install $(curl -fsSL https://ophub.org/ubuntu2204-make-openwrt-depends)
-        sudo -E apt-get -y install libfuse-dev
-        # apt垃圾回收
+        sudo -E apt-get -qq install libfuse-dev
         sudo -E apt -y autoremove --purge
+        sudo -E systemctl daemon-reload
         sudo -E apt clean && sudo -E apt autoclean
-        sudo systemctl daemon-reload || true
-        # 设置时区
         sudo timedatectl set-timezone "$TZ"
-        # 计算可用空间（df -BG 直接输出整数 GB，避免解析 -h 的单位/小数）
-        mnt_size=$(df -BG --output=avail /mnt | tail -n 1 | tr -dc '0-9')
-        root_size=$(df -BG --output=avail / | tail -n 1 | tr -dc '0-9')
-        mnt_size=$((mnt_size - 1))
-        root_size=$((root_size - 4))
-        # 生成稀疏镜像文件
+        echo "status=success" >> ${GITHUB_OUTPUT}
+        df -Th
+        mnt_size=$(expr $(df -h /mnt | tail -1 | awk '{print $4}' | sed 's/[[:alpha:]]//g' | sed 's/\..*//') - 1)
+        root_size=$(expr $(df -h / | tail -1 | awk '{print $4}' | sed 's/[[:alpha:]]//g' | sed 's/\..*//') - 4)
         sudo truncate -s "${mnt_size}"G /mnt/mnt.img
         sudo truncate -s "${root_size}"G /root.img
-        # 绑定loop：用 -f --show 实际分配到的设备，不再写死 loop6/loop7，
-        # 也不再两次调用 losetup -f 拿到同一个空闲设备。
-        LOOP1=$(sudo losetup -f --show /mnt/mnt.img)
-        LOOP2=$(sudo losetup -f --show /root.img)
-        echo "loop devices: $LOOP1 $LOOP2"
-        # LVM创建
-        sudo pvcreate "$LOOP1" "$LOOP2"
-        sudo vgcreate github "$LOOP1" "$LOOP2"
+        sudo losetup /dev/loop6 /mnt/mnt.img
+        sudo losetup /dev/loop7 /root.img
+        sudo pvcreate /dev/loop6
+        sudo pvcreate /dev/loop7
+        sudo vgcreate github /dev/loop6 /dev/loop7
         sudo lvcreate -n runner -l 100%FREE github
-        # 格式化XFS
         sudo mkfs.xfs /dev/github/runner
-        # 创建工作目录并挂载（重点补上）
         sudo mkdir -p /workdir
-        sudo chown "$USER:$(id -g -n "$USER")" /workdir
-        df -hT
-        free -h
+        sudo mount /dev/github/runner /workdir
+        sudo chown -R runner.runner /workdir
+        df -Th
 
     - name: 下载源码
       working-directory: /workdir
