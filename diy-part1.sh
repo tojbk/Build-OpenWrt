@@ -10,9 +10,9 @@
 # See /LICENSE for more information.
 #
 
-# Uncomment a feed source
-#sed -i 's/^#\(.*helloworld\)/\1/' feeds.conf.default
+set -euo pipefail
 
-# Add a feed source
-#echo 'src-git helloworld https://github.com/fw876/helloworld' >>feeds.conf.default
-#echo 'src-git passwall https://github.com/xiaorouji/openwrt-passwall' >>feeds.conf.default
+# Currently no extra feeds are needed. The previous version was
+# entirely commented-out feed lines - removed to avoid dead code.
+# To add a feed, uncomment and pin it, e.g.:
+# echo 'src-git helloworld https://github.com/fw876/helloworld' >>feeds.conf.default
