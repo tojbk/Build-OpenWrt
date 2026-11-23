@@ -48,8 +48,7 @@ jobs:
         DEBIAN_FRONTEND: noninteractive
         TZ: Asia/Shanghai
       run: |
-        set -euo pipefail
-        docker rmi `docker images -q`
+        # docker rmi `docker images -q`
         sudo swapoff -a
         sudo rm -f /swapfile /mnt/swapfile
         sudo docker image prune -a -f
