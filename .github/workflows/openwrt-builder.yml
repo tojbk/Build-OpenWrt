@@ -100,6 +100,7 @@ jobs:
         sudo mkfs.xfs /dev/github/runner
         # 创建工作目录并挂载（重点补上）
         sudo mkdir -p /workdir
+        sudo mount /dev/github/runner /workdir
         sudo chown "$USER:$(id -g -n "$USER")" /workdir
         df -hT
         free -h
