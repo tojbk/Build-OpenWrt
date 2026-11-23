@@ -18,7 +18,9 @@ config wifi-iface 'default_MT7981_1_1'
 	option mode 'ap'
 	option ssid 'H3C_NX30Pro_2.4G'
 	option encryption 'sae-mixed'
-	option key 'sina2008'
+	# NOTE: set a real password locally, do not commit it.
+	# Use e.g. uci set wireless.default_MT7981_1_1.key='<your-password>'
+	option key 'CHANGE_ME'
 
 config wifi-device 'MT7981_1_2'
 	option type 'mtwifi'
@@ -38,13 +40,8 @@ config wifi-iface 'default_MT7981_1_2'
 	option mode 'ap'
 	option ssid 'H3C_NX30Pro_5G'
 	option encryption 'sae-mixed'
-	option key 'sina2008'
+	# NOTE: set a real password locally, do not commit it.
+	option key 'CHANGE_ME'
 
-config wifi-iface 'wifinet2'
-	option device 'MT7981_1_2'
-	option mode 'sta'
-	option ssid 'CMCC-mta7-5G'
-	option encryption 'psk2'
-	option key 'r3e5r96u'
-	option network 'wan wan6'
-
+# Removed: personal STA client (wifinet2) that contained a saved
+# upstream Wi-Fi password. Add it locally if needed, never commit it.
