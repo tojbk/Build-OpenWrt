@@ -31,6 +31,10 @@ env:
 jobs:
   build:
     runs-on: ubuntu-22.04
+    timeout-minutes: 360
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: false
     permissions:
       contents: write
     steps:
@@ -43,7 +47,7 @@ jobs:
         TZ: Asia/Shanghai
       run: |
         set -euo pipefail
-      
+
         # 清理docker镜像
         docker rmi -f $(docker images -q) 2>/dev/null || true
         sudo docker image prune -a -f
@@ -63,31 +67,33 @@ jobs:
         azure-cli ghc* zulu* texlive* firefox google* dotnet* \
         powershell openjdk* mongodb* moby* || true
         # 更新源、安装OpenWrt编译依赖
+        # NOTE: 依赖列表来自外部脚本，未锁定版本。如需完全可复现，
+        # 请把列表 vendor 到仓库里，代替每次 curl。
         sudo -E apt update
         sudo -E apt -y install $(curl -fsSL https://ophub.org/ubuntu2204-make-openwrt-depends)
-        sudo -E apt-get -qq install libfuse-dev
+        sudo -E apt-get -y install libfuse-dev
         # apt垃圾回收
         sudo -E apt -y autoremove --purge
         sudo -E apt clean && sudo -E apt autoclean
         sudo systemctl daemon-reload || true
         # 设置时区
         sudo timedatectl set-timezone "$TZ"
-        # 自动获取空闲loop设备
-        LOOP1=$(sudo losetup -f)
-        LOOP2=$(sudo losetup -f)
-        # 计算可用空间（保留原有逻辑，预留安全空间）
-        mnt_size=$(expr $(df -h /mnt | tail -1 | awk '{print $4}' | sed 's/[[:alpha:]]//g' | sed 's/\..*//') - 1)
-        root_size=$(expr $(df -h / | tail -1 | awk '{print $4}' | sed 's/[[:alpha:]]//g' | sed 's/\..*//') - 4)
+        # 计算可用空间（df -BG 直接输出整数 GB，避免解析 -h 的单位/小数）
+        mnt_size=$(df -BG --output=avail /mnt | tail -n 1 | tr -dc '0-9')
+        root_size=$(df -BG --output=avail / | tail -n 1 | tr -dc '0-9')
+        mnt_size=$((mnt_size - 1))
+        root_size=$((root_size - 4))
         # 生成稀疏镜像文件
         sudo truncate -s "${mnt_size}"G /mnt/mnt.img
         sudo truncate -s "${root_size}"G /root.img
-        # 绑定loop
-        sudo losetup /dev/loop6 /mnt/mnt.img
-        sudo losetup /dev/loop7 /root.img
+        # 绑定loop：用 -f --show 实际分配到的设备，不再写死 loop6/loop7，
+        # 也不再两次调用 losetup -f 拿到同一个空闲设备。
+        LOOP1=$(sudo losetup -f --show /mnt/mnt.img)
+        LOOP2=$(sudo losetup -f --show /root.img)
+        echo "loop devices: $LOOP1 $LOOP2"
         # LVM创建
-        sudo pvcreate /dev/loop6
-        sudo pvcreate /dev/loop7
-        sudo vgcreate github /dev/loop6 /dev/loop7
+        sudo pvcreate "$LOOP1" "$LOOP2"
+        sudo vgcreate github "$LOOP1" "$LOOP2"
         sudo lvcreate -n runner -l 100%FREE github
         # 格式化XFS
         sudo mkfs.xfs /dev/github/runner
@@ -107,12 +113,12 @@ jobs:
     - name: 加载缓存
       uses: actions/cache@v5
       with:
+        # 只缓存 dl 和 ccache。之前缓存 build_dir/staging_dir 体积巨大，
+        # 很容易超 GitHub 10GB 缓存上限、恢复变慢、还可能带回脏状态。
         path: |
           /workdir/openwrt/dl
-          /workdir/openwrt/build_dir
-          /workdir/openwrt/staging_dir
           /workdir/openwrt/ccache
-        key: ${{ runner.os }}-openwrt-${{ hashFiles('**/feeds.conf.default','**/.config') }}
+        key: ${{ runner.os }}-openwrt-${{ hashFiles('.config', 'diy-part1.sh', 'diy-part2.sh', '.github/workflows/openwrt-builder.yml') }}
         restore-keys: |
           ${{ runner.os }}-openwrt-
 
@@ -215,15 +221,18 @@ jobs:
         retain_days: 1
         keep_minimum_runs: 3
 
-    - name: 删除旧Release（保留最新2个）
+    - name: 删除旧Release（保留最新3个）
       if: env.UPLOAD_RELEASE == 'true' && !cancelled()
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        # 获取所有release，按发布时间排序，跳过最新3个，其余删除
-        RELEASES=$(gh release list --limit 100 --json tagName,publishedAt --jq 'sort_by(.publishedAt) | reverse | .[3:] | .[].tagName')
-        for tag in $RELEASES; do
-          gh release delete "$tag" -y
-          git push origin --delete "$tag"
+        set -euo pipefail
+        # 之前注释说保留最新2个，代码跳过最新3个，且没有 GH_TOKEN，
+        # gh 可能鉴权失败；还用 git push --delete 删 tag，和 gh 重复。
+        # 现统一保留最新3个（与上面 keep_minimum_runs: 3 一致），
+        # 用 --cleanup-tag 一步删 release + tag。
+        mapfile -t RELEASES < <(gh release list --limit 100 --json tagName,publishedAt --jq 'sort_by(.publishedAt) | reverse | .[3:] | .[].tagName')
+        for tag in "${RELEASES[@]}"; do
+          [ -n "$tag" ] || continue
+          gh release delete "$tag" -y --cleanup-tag
         done
-
