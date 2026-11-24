@@ -34,7 +34,6 @@ jobs:
       id: init
       env:
       DEBIAN_FRONTEND: noninteractive
-      TZ: Etc/UTC
       run: |
         set -euo pipefail
         echo "=== 1. 清理冗余镜像、工具目录与 Swap ==="
