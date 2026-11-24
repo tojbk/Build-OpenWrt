@@ -19,23 +19,16 @@ env:
 jobs:
   build:
     runs-on: ubuntu-22.04
-    timeout-minutes: 360
-    concurrency:
-      group: ${{ github.workflow }}-${{ github.ref }}
-      cancel-in-progress: false
-    permissions:
-      contents: write
-      actions: write
     steps:
     - name: Checkout
-      uses: actions/checkout@v5
-
+      uses: actions/checkout@v6
+      
     - name: 系统初始化
       id: init
       env:
         DEBIAN_FRONTEND: noninteractive
       run: |
-        # docker rmi `docker images -q`
+        docker rmi `docker images -q`
         sudo swapoff -a
         sudo rm -f /swapfile /mnt/swapfile
         sudo docker image prune -a -f
