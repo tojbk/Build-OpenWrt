@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
 
 env:
-  REPO_URL: https://github.com/1715173329/immortalwrt-mt798x
+  REPO_URL: https://github.com/tojbk/mt798x
   REPO_BRANCH: openwrt-21.02
   FEEDS_CONF: feeds.conf.default
   CONFIG_FILE: .config
@@ -172,8 +172,8 @@ jobs:
         body: |
           📦 固件编译时间：${{ steps.tag.outputs.release_tag }}
           📶 设备：H3C NX30PRO (MT7981)
-          🧱 源码：immortalwrt-mt798x（hanwckf） openwrt-21.02
-          ⚙️ 内核版本：Linux 5.4.284
+          🧱 源码：tojbk/mt798x openwrt-21.02
+          ⚙️ 内核版本：Linux 5.4.302
           🖥️ 编译环境：Ubuntu 22.04
           🔗 默认访问地址：http://192.168.123.1
           👤 用户名：root
