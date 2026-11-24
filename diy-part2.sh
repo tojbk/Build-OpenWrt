@@ -33,3 +33,4 @@ fi
 git clone --depth 1 https://github.com/tojbk/luci-app-openclash "$OPENCLASH_DIR"
 git -C "$OPENCLASH_DIR" checkout "$OPENCLASH_COMMIT"
 git -C "$OPENCLASH_DIR" rev-parse HEAD
+echo "CONFIG_CCACHE=y" >> .config
