@@ -75,7 +75,7 @@ jobs:
       working-directory: /workdir
       run: |
         df -hT $PWD
-        git clone $REPO_URL -b $REPO_BRANCH openwrt
+        git clone --depth 1 --single-branch $REPO_URL -b $REPO_BRANCH openwrt
         ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
 
     - name: 加载缓存
@@ -84,7 +84,7 @@ jobs:
         path: |
           /workdir/openwrt/dl
           /workdir/openwrt/ccache
-        key: ${{ runner.os }}-openwrt-${{ hashFiles('.config', 'diy-part1.sh', 'diy-part2.sh', '.github/workflows/openwrt-builder.yml') }}
+        key: ${{ runner.os }}-openwrt-${{ hashFiles('feeds.conf.default', '.config', 'diy-part1.sh', 'diy-part2.sh', '.github/workflows/openwrt-builder.yml') }}
         restore-keys: |
           ${{ runner.os }}-openwrt-
 
@@ -138,7 +138,7 @@ jobs:
 
     - name: 整理固件文件
       id: organize
-      if: env.UPLOAD_FIRMWARE == 'true' && !cancelled()
+      if: steps.compile.outputs.status == 'success' && env.UPLOAD_FIRMWARE == 'true'
       run: |
         cd openwrt/bin/targets/mediatek/mt7981
         find . \( -name "*buildinfo*" -o -name "*sha256sums*" -o -name "*manifest*" -o -name "*json*" -o -name "*kernel.bin*" -o -name "*factory.bin*" \) -exec rm -rf {} +
@@ -156,9 +156,9 @@ jobs:
 
     - name: 生成release标签
       id: tag
-      if: env.UPLOAD_RELEASE == 'true' && !cancelled()
+      if: steps.compile.outputs.status == 'success' && env.UPLOAD_RELEASE == 'true'
       run: |
-        echo "release_tag=$(date +"%Y.%m.%d-%H%M")" >> $GITHUB_OUTPUT
+        echo "release_tag=$(date +"%Y.%m.%d-%H%M%S")" >> $GITHUB_OUTPUT
         echo "status=success" >> $GITHUB_OUTPUT
 
     - name: 发布固件到Release
@@ -190,7 +190,7 @@ jobs:
         keep_minimum_runs: 2
 
     - name: 删除旧Release（保留最新2个）
-      if: env.UPLOAD_RELEASE == 'true' && !cancelled()
+      if: steps.tag.outputs.status == 'success'
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
