@@ -31,7 +31,6 @@ jobs:
       uses: actions/checkout@v6
       
     - name: 系统初始化
-      id: init
       env:
         DEBIAN_FRONTEND: noninteractive
       run: |
@@ -43,7 +42,9 @@ jobs:
         sudo rm -f /swapfile /mnt/swapfile
         sudo apt-get -y update
         sudo apt-get -y purge azure-cli ghc* zulu* llvm* firefox google* dotnet* powershell openjdk* mongodb* moby* || true
-        sudo apt-get -y install $(curl -fsSL https://ophub.org/ubuntu2204-make-openwrt-depends)
+        # 依赖列表已固化到仓库根目录的 ubuntu2204-depends.txt（原 ophub 列表的快照），
+        # 避免每次构建都从网上现拉，构建结果更稳定。
+        sudo apt-get -y install $(cat ubuntu2204-depends.txt)
         sudo systemctl daemon-reload
         #sudo apt-get -y full-upgrade
         sudo apt-get -y autoremove --purge
@@ -51,12 +52,12 @@ jobs:
         sudo sed -i '/NVM_DIR/d;/skel/d' /root/{.bashrc,.profile}
         sudo rm -rf ~/{.cargo,.dotnet,.rustup}
         sudo timedatectl set-timezone "${TZ:-Etc/UTC}"
-        sudo ntpdate ntp.ubuntu.com 0.pool.ntp.org || true
         sudo timedatectl set-ntp true
         date -u
         timedatectl status || true
-        echo "status=success" >> ${GITHUB_OUTPUT}
 
+    - name: 创建虚拟磁盘
+      run: |
         set -euo pipefail
         root_avail=$(df --block-size=1G / | tail -1 | awk '{print $4}')
         root_size=$(( root_avail - 4 ))
@@ -69,7 +70,6 @@ jobs:
         sudo mount "${build_dev}" /workdir
         sudo chown -R runner:runner /workdir
         df -Th
-        echo "status=success" >> ${GITHUB_OUTPUT}
 
     - name: 下载源码
       working-directory: /workdir
@@ -96,9 +96,10 @@ jobs:
         $GITHUB_WORKSPACE/$DIY_P1_SH
 
     - name: 更新安装feeds
-       run: cd openwrt
-         ./scripts/feeds update -a
-         ./scripts/feeds install -a
+      run: |
+        cd openwrt
+        ./scripts/feeds update -a
+        ./scripts/feeds install -a
 
     - name: 加载配置 diy-part2
       run: |
@@ -139,7 +140,7 @@ jobs:
       id: organize
       if: env.UPLOAD_FIRMWARE == 'true' && !cancelled()
       run: |
-        cd openwrt/bin/targets/*/*
+        cd openwrt/bin/targets/mediatek/mt7981
         find . \( -name "*buildinfo*" -o -name "*sha256sums*" -o -name "*manifest*" -o -name "*json*" -o -name "*kernel.bin*" -o -name "*factory.bin*" \) -exec rm -rf {} +
         rm -rf packages
         echo "FIRMWARE=$PWD" >> $GITHUB_ENV
@@ -194,7 +195,7 @@ jobs:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         set -euo pipefail
-        mapfile -t RELEASES < <(gh release list --limit 100 --json tagName,publishedAt --jq 'sort_by(.publishedAt) | reverse | .[2:] | .[].tagName')
+        mapfile -t RELEASES < <(gh release list --limit 1000 --json tagName,publishedAt --jq 'sort_by(.publishedAt) | reverse | .[2:] | .[].tagName')
         for tag in "${RELEASES[@]}"; do
           [ -n "$tag" ] || continue
           gh release delete "$tag" -y --cleanup-tag
