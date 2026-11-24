@@ -96,25 +96,11 @@ jobs:
         with:
           path: |
             /workdir/openwrt/dl
-            /workdir/openwrt/ccache
-          key: ${{ runner.os }}-openwrt-${{ hashFiles('.config', 'diy-part1.sh', 'diy-part2.sh') }}
+            /workdir/ccache
+          key: ${{ runner.os }}-openwrt-${{ hashFiles('.config', 'diy-part1.sh', 'diy-part2.sh') }}-${{ github.run_id }}
           restore-keys: |
+            ${{ runner.os }}-openwrt-${{ hashFiles('.config', 'diy-part1.sh', 'diy-part2.sh') }}-
             ${{ runner.os }}-openwrt-
-
-      - name: 加载设置 diy-part1
-        run: |
-          set -euo pipefail
-          [ -e "$FEEDS_CONF" ] && mv "$FEEDS_CONF" openwrt/feeds.conf.default
-          chmod +x "$DIY_P1_SH"
-          cd openwrt
-          "$GITHUB_WORKSPACE/$DIY_P1_SH"
-
-      - name: 更新安装feeds
-        run: |
-          set -euo pipefail
-          cd openwrt
-          ./scripts/feeds update -a
-          ./scripts/feeds install -a
 
       - name: 加载配置 diy-part2
         run: |
@@ -124,6 +110,7 @@ jobs:
           chmod +x "$DIY_P2_SH"
           cd openwrt
           "$GITHUB_WORKSPACE/$DIY_P2_SH"
+          grep -q '^CONFIG_CCACHE=y' .config || echo 'CONFIG_CCACHE=y' >> .config
 
       - name: 下载dl包
         id: package
@@ -137,11 +124,19 @@ jobs:
 
       - name: 编译固件
         id: compile
+        env:
+          CCACHE_DIR: /workdir/ccache
+          CCACHE_MAXSIZE: 4G
         run: |
           set -euo pipefail
           cd openwrt
+          mkdir -p /workdir/ccache
+          echo "=== 编译前 ccache 状态 ==="
+          ccache -s || true
           echo "$(nproc) thread compile"
           make -j$(nproc) || make -j1 V=s
+          echo "=== 编译后 ccache 状态 ==="
+          ccache -s || true
           echo "status=success" >> "$GITHUB_OUTPUT"
           grep '^CONFIG_TARGET.*DEVICE.*=y' .config | sed -r 's/.*DEVICE_(.*)=y/\1/' > DEVICE_NAME
           [ -s DEVICE_NAME ] && echo "DEVICE_NAME=_$(cat DEVICE_NAME)" >> "$GITHUB_ENV"
