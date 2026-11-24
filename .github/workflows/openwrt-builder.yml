@@ -57,8 +57,6 @@ jobs:
         timedatectl status || true
         echo "status=success" >> ${GITHUB_OUTPUT}
 
-    - name: 创建磁盘
-      run: |
         set -euo pipefail
         root_avail=$(df --block-size=1G / | tail -1 | awk '{print $4}')
         root_size=$(( root_avail - 4 ))
@@ -97,11 +95,8 @@ jobs:
         cd openwrt
         $GITHUB_WORKSPACE/$DIY_P1_SH
 
-    - name: 更新feeds
-      run: cd openwrt && ./scripts/feeds update -a
-
-    - name: 安装feeds
-      run: cd openwrt && ./scripts/feeds install -a
+    - name: 更新安装feeds
+      run: cd openwrt && ./scripts/feeds update -a && ./scripts/feeds install -a
 
     - name: 加载配置 diy-part2
       run: |
