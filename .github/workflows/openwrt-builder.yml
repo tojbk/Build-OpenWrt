@@ -73,6 +73,7 @@ jobs:
             echo "Error: 可用空间不足，当前可用: ${root_avail}G，分配给 /workdir: ${root_size}G"
             exit 1
           fi
+          
           echo "根分区可用: ${root_avail}G，为 /workdir 创建 ${root_size}G XFS 镜像..."
           sudo truncate -s "${root_size}G" /root.img
           build_dev=$(sudo losetup --find --show /root.img)
