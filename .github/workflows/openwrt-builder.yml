@@ -55,10 +55,7 @@ jobs:
         sudo timedatectl set-ntp true
         date -u
         timedatectl status || true
-
-    - name: 创建虚拟磁盘
-      run: |
-        set -euo pipefail
+        # 创建虚拟磁盘：根分区剩余空间减 4G 做单个 loop 镜像，挂到 /workdir
         root_avail=$(df --block-size=1G / | tail -1 | awk '{print $4}')
         root_size=$(( root_avail - 4 ))
         [[ "${root_size}" -gt 0 ]] || { echo "Error: Insufficient space on /: ${root_avail}G available"; exit 1; }
