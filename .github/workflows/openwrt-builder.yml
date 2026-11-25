@@ -42,8 +42,6 @@ jobs:
         sudo rm -f /swapfile /mnt/swapfile
         sudo apt-get -y update
         sudo apt-get -y purge azure-cli ghc* zulu* llvm* firefox google* dotnet* powershell openjdk* mongodb* moby* || true
-        # 依赖列表已固化到仓库根目录的 ubuntu2204-depends.txt（原 ophub 列表的快照），
-        # 避免每次构建都从网上现拉，构建结果更稳定。
         sudo apt-get -y install $(cat ubuntu2204-depends.txt)
         sudo systemctl daemon-reload
         #sudo apt-get -y full-upgrade
@@ -55,7 +53,6 @@ jobs:
         sudo timedatectl set-ntp true
         date -u
         timedatectl status || true
-        # 创建虚拟磁盘：根分区剩余空间减 4G 做单个 loop 镜像，挂到 /workdir
         root_avail=$(df --block-size=1G / | tail -1 | awk '{print $4}')
         root_size=$(( root_avail - 4 ))
         [[ "${root_size}" -gt 0 ]] || { echo "Error: Insufficient space on /: ${root_avail}G available"; exit 1; }
@@ -92,7 +89,7 @@ jobs:
         cd openwrt
         $GITHUB_WORKSPACE/$DIY_P1_SH
 
-    - name: 更新安装feeds
+    - name: 更新安装 feeds
       run: |
         cd openwrt
         ./scripts/feeds update -a
